@@ -13,6 +13,48 @@
 
 namespace llvm {
 namespace remarks {
+
+/// Convert Regex string error to an error object.
+Error checkRegex(Regex &Regex) {
+  std::string Error;
+  if (!Regex.isValid(Error))
+    return createStringError(make_error_code(std::errc::invalid_argument),
+                             Twine("Regex: ", Error));
+  return Error::success();
+}
+
+Error Filters::regexArgumentsValid() {
+  if (RemarkNameFilter.has_value() && RemarkNameFilter->IsRegex)
+    if (auto E = checkRegex(std::get<Regex>(RemarkNameFilter->FilterRE)))
+      return E;
+  if (PassNameFilter.has_value() && PassNameFilter->IsRegex)
+    if (auto E = checkRegex(std::get<Regex>(PassNameFilter->FilterRE)))
+      return E;
+  if (ArgFilter.has_value() && ArgFilter->IsRegex)
+    if (auto E = checkRegex(std::get<Regex>(ArgFilter->FilterRE)))
+      return E;
+  return Error::success();
+}
+
+bool Filters::filterRemark(const Remark &Remark) {
+  if (RemarkNameFilter.has_value())
+    if (!RemarkNameFilter->match(Remark.RemarkName))
+      return false;
+  if (PassNameFilter)
+    if (!PassNameFilter->match(Remark.PassName))
+      return false;
+  if (RemarkTypeFilter.has_value())
+    return *RemarkTypeFilter == Remark.RemarkType;
+  if (ArgFilter) {
+    bool IsMatch = false;
+    for (const auto &Arg : Remark.Args)
+      IsMatch |= ArgFilter->match(Arg.Val);
+    if (!IsMatch)
+      return false;
+  }
+  return true;
+}
+
 /// \returns A MemoryBuffer for the input file on success, and an Error
 /// otherwise.
 Expected<std::unique_ptr<MemoryBuffer>>

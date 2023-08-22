@@ -18,6 +18,7 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Regex.h"
 #include "llvm/Support/ToolOutputFile.h"
 
 // Keep input + output help + names consistent across the various modes via a
@@ -47,6 +48,48 @@
           "number)"),                                                          \
       cl::init(false), cl::sub(SUBOPT));
 
+#define FILTER_COMMAND_LINE_OPTIONS(SUBOPT)                                    \
+  static cl::opt<std::string> RemarkNameOpt(                                   \
+      "remark-name",                                                           \
+      cl::desc("optional remark name to filter collection by."),               \
+      cl::ValueOptional, cl::sub(SUBOPT));                                     \
+  static cl::opt<std::string> PassNameOpt(                                     \
+      "pass-name", cl::ValueOptional,                                          \
+      cl::desc("optional remark pass name to filter collection by."),          \
+      cl::sub(SUBOPT));                                                        \
+  static cl::opt<std::string> RemarkFilterArgByOpt(                            \
+      "filter-arg-by",                                                         \
+      cl::desc("optional remark arg to filter "                                \
+               "collection by."),                                              \
+      cl::ValueOptional, cl::sub(SUBOPT));                                     \
+  static cl::opt<std::string> RemarkNameOptRE(                                 \
+      "rremark-name",                                                          \
+      cl::desc("optional remark name to filter collection by "                 \
+               "(accepts regular expressions)."),                              \
+      cl::ValueOptional, cl::sub(SUBOPT));                                     \
+  static cl::opt<std::string> PassNameOptRE(                                   \
+      "rpass-name", cl::ValueOptional,                                         \
+      cl::desc("optional remark pass name to filter collection "               \
+               "by (accepts regular expressions)"),                            \
+      cl::sub(SUBOPT));                                                        \
+  static cl::opt<std::string> RemarkArgFilterOptRE(                            \
+      "rfilter-arg-by",                                                        \
+      cl::desc("optional remark arg to filter collection by "                  \
+               "(accepts regular expressions)."),                              \
+      cl::sub(SUBOPT), cl::ValueOptional);                                     \
+  static cl::opt<Type> RemarkTypeOpt(                                          \
+      "remark-type", cl::desc("filter collection by remark type."),            \
+      cl::values(clEnumValN(Type::Unknown, "unknown", "UNKOWN"),               \
+                 clEnumValN(Type::Passed, "passed", "PASSED"),                 \
+                 clEnumValN(Type::Missed, "missed", "MISSED"),                 \
+                 clEnumValN(Type::Analysis, "analysis", "ANALYSIS"),           \
+                 clEnumValN(Type::AnalysisFPCommute, "analysis-fp-commute",    \
+                            "ANALYSIS_FP_COMMUTE"),                            \
+                 clEnumValN(Type::AnalysisAliasing, "analysis-aliasing",       \
+                            "ANALYSIS_ALIASING"),                              \
+                 clEnumValN(Type::Failure, "failure", "FAILURE")),             \
+      cl::init(Type::Failure), cl::sub(SUBOPT));
+
 namespace llvm {
 namespace remarks {
 Expected<std::unique_ptr<MemoryBuffer>>
@@ -55,5 +98,57 @@ Expected<std::unique_ptr<ToolOutputFile>>
 getOutputFileWithFlags(StringRef OutputFileName, sys::fs::OpenFlags Flags);
 Expected<std::unique_ptr<ToolOutputFile>>
 getOutputFileForRemarks(StringRef OutputFileName, Format OutputFormat);
+Error checkRegex(Regex &Regex);
+enum ReportStyleOptions { human_output, json_output };
+
+// Filter object which can be
+// either a string or a regex
+// to match with the remark
+// properties.
+struct FilterMatcher {
+  std::variant<Regex, std::string> FilterRE, FilterStr;
+  bool IsRegex;
+  FilterMatcher(std::string Filter, bool IsRegex) : IsRegex(IsRegex) {
+    if (IsRegex)
+      FilterRE = Regex(Filter);
+    else
+      FilterStr = Filter;
+  }
+  bool match(StringRef StringToMatch) {
+    if (IsRegex)
+      return std::get<Regex>(FilterRE).match(StringToMatch);
+    return std::get<std::string>(FilterStr) == StringToMatch.trim().str();
+  }
+};
+
+/// Filter out remarks based on properties.
+struct Filters {
+  std::optional<FilterMatcher> RemarkNameFilter;
+  std::optional<FilterMatcher> PassNameFilter;
+  std::optional<FilterMatcher> ArgFilter;
+  std::optional<Type> RemarkTypeFilter;
+  /// Returns a filter object if all the arguments provided are valid regex
+  /// types otherwise return an error.
+  static Expected<Filters>
+  createRemarkFilter(std::optional<FilterMatcher> RemarkNameFilter,
+                     std::optional<FilterMatcher> PassNameFilter,
+                     std::optional<FilterMatcher> ArgFilter,
+                     std::optional<Type> RemarkTypeFilter) {
+    Filters Filter;
+    Filter.RemarkNameFilter = std::move(RemarkNameFilter);
+    Filter.PassNameFilter = std::move(PassNameFilter);
+    Filter.ArgFilter = std::move(ArgFilter);
+    Filter.RemarkTypeFilter = std::move(RemarkTypeFilter);
+    if (auto E = Filter.regexArgumentsValid())
+      return E;
+    return Filter;
+  }
+  /// Returns true if the remark satisfies all the provided filters.
+  bool filterRemark(const Remark &Remark);
+
+private:
+  /// Check if arguments can be parsed as valid regex types.
+  Error regexArgumentsValid();
+};
 } // namespace remarks
 } // namespace llvm

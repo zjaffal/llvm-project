@@ -27,7 +27,6 @@ static cl::SubCommand
     RemarkSizeDiffUtil("size-diff",
                        "Diff instruction count and stack size remarks "
                        "between two remark files");
-enum ReportStyleOptions { human_output, json_output };
 static cl::opt<std::string> InputFileNameA(cl::Positional, cl::Required,
                                            cl::sub(RemarkSizeDiffUtil),
                                            cl::desc("remarks_a"));

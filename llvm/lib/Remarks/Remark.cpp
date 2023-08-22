@@ -45,13 +45,16 @@ void RemarkLocation::print(raw_ostream &OS) const {
 void Argument::print(raw_ostream &OS) const {
   OS << Key << ": " << Val << "\n";
 }
-
-void Remark::print(raw_ostream &OS) const {
+void Remark::printHeader(raw_ostream &OS) const {
   OS << "Name: ";
   OS << RemarkName << "\n";
-  OS << "Type: " << typeToStr(RemarkType) << "\n";
   OS << "FunctionName: " << FunctionName << "\n";
   OS << "PassName: " << PassName << "\n";
+}
+
+void Remark::print(raw_ostream &OS) const {
+  printHeader(OS);
+  OS << "Type: " << typeToStr(RemarkType) << "\n";
   if (Loc)
     OS << "Loc: " << Loc.value();
   if (Hotness)
@@ -61,6 +64,21 @@ void Remark::print(raw_ostream &OS) const {
     for (auto Arg : Args)
       OS << "\t" << Arg;
   }
+}
+
+bool Argument::strictEquals(const Argument &Arg) {
+  return Arg.Loc == Loc && Key == Arg.Key && Val == Arg.Val;
+}
+
+bool Remark::strictEquals(const Remark &RHS) {
+  if (*this != RHS)
+    return false;
+  if (Args.size() != RHS.Args.size())
+    return false;
+  for (unsigned Idx = 0; Idx < Args.size(); Idx++)
+    if (!Args[Idx].strictEquals(RHS.Args[Idx]))
+      return false;
+  return true;
 }
 
 // Create wrappers for C Binding types (see CBindingWrapping.h).
@@ -127,43 +145,43 @@ LLVMRemarkEntryGetFunctionName(LLVMRemarkEntryRef Remark) {
   return wrap(&unwrap(Remark)->FunctionName);
 }
 
-extern "C" LLVMRemarkDebugLocRef
-LLVMRemarkEntryGetDebugLoc(LLVMRemarkEntryRef Remark) {
-  if (const std::optional<RemarkLocation> &Loc = unwrap(Remark)->Loc)
-    return wrap(&*Loc);
-  return nullptr;
-}
-
-extern "C" uint64_t LLVMRemarkEntryGetHotness(LLVMRemarkEntryRef Remark) {
-  if (const std::optional<uint64_t> &Hotness = unwrap(Remark)->Hotness)
-    return *Hotness;
-  return 0;
-}
-
-extern "C" uint32_t LLVMRemarkEntryGetNumArgs(LLVMRemarkEntryRef Remark) {
-  return unwrap(Remark)->Args.size();
-}
-
-extern "C" LLVMRemarkArgRef
-LLVMRemarkEntryGetFirstArg(LLVMRemarkEntryRef Remark) {
-  ArrayRef<Argument> Args = unwrap(Remark)->Args;
-  // No arguments to iterate on.
-  if (Args.empty())
+  extern "C" LLVMRemarkDebugLocRef
+  LLVMRemarkEntryGetDebugLoc(LLVMRemarkEntryRef Remark) {
+    if (const std::optional<RemarkLocation> &Loc = unwrap(Remark)->Loc)
+      return wrap(&*Loc);
     return nullptr;
-  return reinterpret_cast<LLVMRemarkArgRef>(
-      const_cast<Argument *>(Args.begin()));
-}
+  }
 
-extern "C" LLVMRemarkArgRef
-LLVMRemarkEntryGetNextArg(LLVMRemarkArgRef ArgIt, LLVMRemarkEntryRef Remark) {
-  // No more arguments to iterate on.
-  if (ArgIt == nullptr)
-    return nullptr;
+  extern "C" uint64_t LLVMRemarkEntryGetHotness(LLVMRemarkEntryRef Remark) {
+    if (const std::optional<uint64_t> &Hotness = unwrap(Remark)->Hotness)
+      return *Hotness;
+    return 0;
+  }
 
-  auto It = (ArrayRef<Argument>::const_iterator)ArgIt;
-  auto Next = std::next(It);
-  if (Next == unwrap(Remark)->Args.end())
-    return nullptr;
+  extern "C" uint32_t LLVMRemarkEntryGetNumArgs(LLVMRemarkEntryRef Remark) {
+    return unwrap(Remark)->Args.size();
+  }
 
-  return reinterpret_cast<LLVMRemarkArgRef>(const_cast<Argument *>(Next));
-}
+  extern "C" LLVMRemarkArgRef
+  LLVMRemarkEntryGetFirstArg(LLVMRemarkEntryRef Remark) {
+    ArrayRef<Argument> Args = unwrap(Remark)->Args;
+    // No arguments to iterate on.
+    if (Args.empty())
+      return nullptr;
+    return reinterpret_cast<LLVMRemarkArgRef>(
+        const_cast<Argument *>(Args.begin()));
+  }
+
+  extern "C" LLVMRemarkArgRef
+  LLVMRemarkEntryGetNextArg(LLVMRemarkArgRef ArgIt, LLVMRemarkEntryRef Remark) {
+    // No more arguments to iterate on.
+    if (ArgIt == nullptr)
+      return nullptr;
+
+    auto It = (ArrayRef<Argument>::const_iterator)ArgIt;
+    auto Next = std::next(It);
+    if (Next == unwrap(Remark)->Args.end())
+      return nullptr;
+
+    return reinterpret_cast<LLVMRemarkArgRef>(const_cast<Argument *>(Next));
+  }

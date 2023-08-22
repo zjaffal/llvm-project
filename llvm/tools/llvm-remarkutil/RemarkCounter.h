@@ -47,63 +47,6 @@ inline std::string groupByToStr(GroupBy GroupBy) {
   }
 }
 
-// Filter object which can be either a string or a regex to match with the
-// remark properties.
-struct FilterMatcher {
-  std::variant<Regex, std::string> FilterRE, FilterStr;
-  bool IsRegex;
-  FilterMatcher(std::string Filter, bool IsRegex) : IsRegex(IsRegex) {
-    if (IsRegex)
-      FilterRE = Regex(Filter);
-    else
-      FilterStr = Filter;
-  }
-  bool match(StringRef StringToMatch) {
-    if (IsRegex)
-      return std::get<Regex>(FilterRE).match(StringToMatch);
-    return std::get<std::string>(FilterStr) == StringToMatch.trim().str();
-  }
-};
-
-/// Filter out remarks based on properties.
-struct Filters {
-  std::optional<FilterMatcher> RemarkNameFilter;
-  std::optional<FilterMatcher> PassNameFilter;
-  std::optional<FilterMatcher> ArgFilter;
-  std::optional<Type> RemarkTypeFilter;
-  /// Returns a filter object if all the arguments provided are valid regex
-  /// types otherwise return an error.
-  static Expected<Filters>
-  createRemarkFilter(std::optional<FilterMatcher> RemarkNameFilter,
-                     std::optional<FilterMatcher> PassNameFilter,
-                     std::optional<FilterMatcher> ArgFilter,
-                     std::optional<Type> RemarkTypeFilter) {
-    Filters Filter;
-    Filter.RemarkNameFilter = std::move(RemarkNameFilter);
-    Filter.PassNameFilter = std::move(PassNameFilter);
-    Filter.ArgFilter = std::move(ArgFilter);
-    Filter.RemarkTypeFilter = std::move(RemarkTypeFilter);
-    if (auto E = Filter.regexArgumentsValid())
-      return E;
-    return Filter;
-  }
-  /// Returns true if the remark satisfies all the provided filters.
-  bool filterRemark(const Remark &Remark);
-
-private:
-  /// Check if arguments can be parsed as valid regex types.
-  Error regexArgumentsValid();
-};
-
-// Convert Regex string error to an error object.
-inline Error checkRegex(Regex &Regex) {
-  std::string Error;
-  if (!Regex.isValid(Error))
-    return createStringError(make_error_code(std::errc::invalid_argument),
-                             Twine("Regex: ", Error));
-  return Error::success();
-}
-
 /// Abstract counter class used to define the general required methods for
 /// counting a remark.
 struct Counter {

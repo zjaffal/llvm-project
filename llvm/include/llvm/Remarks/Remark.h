@@ -50,6 +50,10 @@ struct Argument {
   // If set, the debug location corresponding to the value.
   std::optional<RemarkLocation> Loc;
 
+  /// strict equals between the current argument and \p Arg. Takes into account
+  /// the argument location.
+  bool strictEquals(const Argument &Arg);
+
   /// Implement operator<< on Argument.
   void print(raw_ostream &OS) const;
   /// Return the value of argument as int.
@@ -129,10 +133,15 @@ struct Remark {
   /// Clone this remark to explicitly ask for a copy.
   Remark clone() const { return *this; }
 
+  /// Remark strict equal takes into account the arguments debug location.
+  bool strictEquals(const Remark &RHS);
   /// Implement operator<< on Remark.
   void print(raw_ostream &OS) const;
-
-private:
+  void printHeader(raw_ostream &OS) const;
+  bool hasSameHeader(const Remark &RHS) const {
+    return RemarkName == RHS.RemarkName && FunctionName == RHS.FunctionName &&
+           PassName == RHS.PassName;
+  }
   /// In order to avoid unwanted copies, "delete" the copy constructor.
   /// If a copy is needed, it should be done through `Remark::clone()`.
   Remark(const Remark &) = default;
@@ -174,7 +183,7 @@ inline bool operator<(const RemarkLocation &LHS, const RemarkLocation &RHS) {
 }
 
 inline bool operator==(const Argument &LHS, const Argument &RHS) {
-  return LHS.Key == RHS.Key && LHS.Val == RHS.Val && LHS.Loc == RHS.Loc;
+  return LHS.Key == RHS.Key && LHS.Val == RHS.Val;
 }
 
 inline bool operator!=(const Argument &LHS, const Argument &RHS) {

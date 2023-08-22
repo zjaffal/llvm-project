@@ -1,0 +1,32 @@
+--- !Analysis
+Pass:            Pass 
+Name:            RemarkName 
+DebugLoc:        { File: path/to/anno.c, Line: 1, Column: 2 }
+Function:        func0
+Args:
+  - String:   '2'
+  - String:          'Info2'
+--- !Analysis
+Pass:            Pass 
+Name:            RemarkName2 
+DebugLoc:        { File: path/to/anno.c, Line: 1, Column: 2 }
+Function:        func0
+Args:
+  - String:   '2'
+  - String:          'Info'
+--- !Analysis
+Pass:            Pass 
+Name:            RemarkName 
+DebugLoc:        { File: path/to/anno.c, Line: 3, Column: 2 }
+Function:        func2
+Args:
+  - String:   '3'
+  - String:          'Info2'
+--- !Analysis
+Pass:            Pass 
+Name:            RemarkName2 
+DebugLoc:        { File: path/to/anno.c, Line: 3, Column: 2 }
+Function:        func0
+Args:
+  - String:   '2'
+  - String:          'Info3'
